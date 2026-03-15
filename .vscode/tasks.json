@@ -1,0 +1,35 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start PipeHub Local Stack",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /Users/hongyizhang/pipeshub/pipeshub-ai; make -f scripts/Makefile docker-all; cd backend/nodejs/apps; PATH=/opt/homebrew/opt/node@20/bin:$PATH nohup npm run dev > /Users/hongyizhang/pipeshub/pipeshub-ai/nodejs.dev.log 2>&1 & disown; cd ../../backend/python; source venv/bin/activate; nohup python -m app.connectors_main > /Users/hongyizhang/pipeshub/pipeshub-ai/connectors.dev.log 2>&1 & disown; nohup python -m app.indexing_main > /Users/hongyizhang/pipeshub/pipeshub-ai/indexing.dev.log 2>&1 & disown; nohup python -m app.query_main > /Users/hongyizhang/pipeshub/pipeshub-ai/query.dev.log 2>&1 & disown; nohup python -m app.docling_main > /Users/hongyizhang/pipeshub/pipeshub-ai/docling.dev.log 2>&1 & disown; cd ../../frontend; PATH=/opt/homebrew/opt/node@20/bin:$PATH nohup npm run dev > /Users/hongyizhang/pipeshub/pipeshub-ai/frontend.dev.log 2>&1 & disown; sleep 3; curl -sS http://127.0.0.1:3000/api/v1/docs/health; echo; curl -sS http://127.0.0.1:8088/health; echo; curl -sS http://127.0.0.1:8091/health; echo; curl -sS http://127.0.0.1:8000/health; echo; curl -sS http://127.0.0.1:8081/health; echo"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "PipeHub start all local",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -euo pipefail; cd /Users/hongyizhang/pipeshub/pipeshub-ai; make -f scripts/Makefile docker-all >/tmp/pipeshub-docker.log 2>&1 || true; pkill -f 'backend/nodejs/apps.*nodemon' || true; pkill -f 'app.connectors_main' || true; pkill -f 'app.indexing_main' || true; pkill -f 'app.query_main' || true; pkill -f 'app.docling_main' || true; pkill -f 'vite' || true; cd backend/nodejs/apps; PATH=/opt/homebrew/opt/node@20/bin:$PATH nohup npm run dev >/Users/hongyizhang/pipeshub/pipeshub-ai/nodejs.dev.log 2>&1 & disown; cd ../../backend/python; source venv/bin/activate; nohup python -m app.connectors_main >/Users/hongyizhang/pipeshub/pipeshub-ai/connectors.dev.log 2>&1 & disown; nohup python -m app.indexing_main >/Users/hongyizhang/pipeshub/pipeshub-ai/indexing.dev.log 2>&1 & disown; nohup python -m app.query_main >/Users/hongyizhang/pipeshub/pipeshub-ai/query.dev.log 2>&1 & disown; nohup python -m app.docling_main >/Users/hongyizhang/pipeshub/pipeshub-ai/docling.dev.log 2>&1 & disown; cd ../../frontend; PATH=/opt/homebrew/opt/node@20/bin:$PATH nohup npm run dev >/Users/hongyizhang/pipeshub/pipeshub-ai/frontend.dev.log 2>&1 & disown; sleep 8; echo '---health---'; curl -fsS http://127.0.0.1:3000/api/v1/docs/health; echo; curl -fsS http://127.0.0.1:8088/health; echo; curl -fsS http://127.0.0.1:8091/health; echo; curl -fsS http://127.0.0.1:8000/health; echo; curl -fsS http://127.0.0.1:8081/health; echo"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Check PipeHub Ports",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"lsof -nP -iTCP:3000 -iTCP:3001 -iTCP:8000 -iTCP:8081 -iTCP:8088 -iTCP:8091 -sTCP:LISTEN || true"
+			],
+			"isBackground": false
+		}
+	]
+}

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenViking UI</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #121a33;
+        --text: #eaf0ff;
+        --muted: #98a6d5;
+        --primary: #5b8cff;
+        --ok: #14b86a;
+        --border: #243058;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 500px at 20% -10%, #1b2b63 0%, var(--bg) 45%);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .wrap { max-width: 980px; margin: 24px auto; padding: 0 14px; }
+      .card {
+        background: linear-gradient(180deg, #141f3d 0%, var(--panel) 100%);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .title { font-size: 18px; font-weight: 700; margin: 0 0 12px; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      input[type="text"], textarea, input[type="number"] {
+        width: 100%;
+        background: #0d1530;
+        border: 1px solid #2a3b75;
+        color: var(--text);
+        border-radius: 10px;
+        padding: 10px 12px;
+        outline: none;
+      }
+      textarea { min-height: 96px; resize: vertical; }
+      .grow { flex: 1; min-width: 260px; }
+      .btn {
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 10px 14px;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--primary);
+      }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .btn.success { background: var(--ok); }
+      .status { margin-top: 10px; color: var(--muted); }
+      .status.working { color: #8ab4ff; }
+      .status.ok { color: #79e0aa; }
+      .status.err { color: #ff8a8a; }
+      .chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip {
+        background: #0d1530;
+        border: 1px solid #334885;
+        color: #bcd0ff;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .snippet {
+        white-space: pre-wrap;
+        min-height: 200px;
+        max-height: 68vh;
+        overflow: auto;
+        background: #0a1127;
+        border: 1px solid #2a3b75;
+        border-radius: 10px;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .muted { color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h2 class="title">上传资料目录</h2>
+        <div class="row">
+          <input id="folderPath" class="grow" type="text" placeholder="例如: /Users/hongyizhang/AI-companian" />
+          <button id="registerBtn" class="btn">上传目录</button>
+        </div>
+        <div id="resources" class="chips"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="title">上传 Agent</h2>
+        <div class="row">
+          <input id="agentFile" type="file" accept=".json,.txt,.py" class="grow" />
+          <button id="agentBtn" class="btn success">上传 Agent</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="title">请输入问题</h2>
+        <textarea id="query" placeholder="输入检索问题，按 Cmd/Ctrl + Enter 可直接提交"></textarea>
+        <div class="row" style="margin-top: 10px; justify-content: space-between;">
+          <div class="row">
+            <span class="muted">top_k</span>
+            <input id="topK" type="number" value="5" min="1" max="20" style="width:90px" />
+          </div>
+          <button id="queryBtn" class="btn">提交问题</button>
+        </div>
+        <div id="queryStatus" class="status"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="title">结果片段</h2>
+        <div id="snippet" class="snippet">暂无结果</div>
+      </div>
+    </div>
+
+    <script>
+      const folderPathEl = document.getElementById('folderPath')
+      const registerBtn = document.getElementById('registerBtn')
+      const resourcesEl = document.getElementById('resources')
+      const agentFileEl = document.getElementById('agentFile')
+      const agentBtn = document.getElementById('agentBtn')
+      const queryEl = document.getElementById('query')
+      const topKEl = document.getElementById('topK')
+      const queryBtn = document.getElementById('queryBtn')
+      const queryStatusEl = document.getElementById('queryStatus')
+      const snippetEl = document.getElementById('snippet')
+
+      let sessionId = localStorage.getItem('auto_session_id') || ''
+
+      const setStatus = (text, cls = '') => {
+        queryStatusEl.className = 'status ' + cls
+        queryStatusEl.textContent = text
+      }
+
+      async function fetchResources() {
+        try {
+          const res = await fetch('/api/resources')
+          const data = await res.json()
+          const items = data.uploaded_folders || []
+          if (!folderPathEl.value.trim() && items.length > 0) {
+            folderPathEl.value = items[0]
+          }
+          resourcesEl.innerHTML = items.length
+            ? items.map(i => `<span class="chip">${i}</span>`).join('')
+            : '<span class="muted">暂无已上传目录</span>'
+        } catch {
+          resourcesEl.innerHTML = '<span class="muted">读取目录失败</span>'
+        }
+      }
+
+      async function registerFolder() {
+        const folderPath = folderPathEl.value.trim()
+        if (!folderPath) return alert('请先输入目录路径')
+
+        registerBtn.disabled = true
+        registerBtn.textContent = '上传中...'
+        try {
+          const res = await fetch('/api/resources/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_path: folderPath })
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.detail || '上传失败')
+          await fetchResources()
+          alert(data.message || '上传成功')
+        } catch (e) {
+          alert(e.message || '上传失败')
+        } finally {
+          registerBtn.disabled = false
+          registerBtn.textContent = '上传目录'
+        }
+      }
+
+      async function uploadAgent() {
+        const f = agentFileEl.files && agentFileEl.files[0]
+        if (!f) return alert('请先选择 Agent 文件')
+
+        agentBtn.disabled = true
+        agentBtn.textContent = '上传中...'
+        try {
+          const fd = new FormData()
+          fd.append('file', f)
+          const res = await fetch('/api/agents/upload', { method: 'POST', body: fd })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.detail || '上传失败')
+          alert(data.message || '上传成功')
+        } catch (e) {
+          alert(e.message || '上传失败')
+        } finally {
+          agentBtn.disabled = false
+          agentBtn.textContent = '上传 Agent'
+        }
+      }
+
+      async function runQuery() {
+        const query = queryEl.value.trim()
+        const folderPath = folderPathEl.value.trim() || null
+        const topK = Math.max(1, Math.min(20, Number(topKEl.value || 5)))
+        if (!query) return alert('请输入问题')
+        if (!folderPath) return alert('请先上传或填写资料目录路径')
+
+        queryBtn.disabled = true
+        queryBtn.textContent = '提交中...'
+        setStatus('问题已提交，Viking 正在工作中...', 'working')
+
+        try {
+          const res = await fetch('/api/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query,
+              session_id: sessionId || null,
+              folder_path: folderPath,
+              top_k: topK,
+              commit_after_response: false
+            })
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.detail || '查询失败')
+
+          sessionId = data.session_id || sessionId
+          if (sessionId) localStorage.setItem('auto_session_id', sessionId)
+          snippetEl.textContent = data.snippet || '暂无结果'
+          setStatus('问题已提交并完成检索，记忆正在后台更新...', 'ok')
+
+          if (sessionId) {
+            fetch(`/api/sessions/${sessionId}/commit`, { method: 'POST' })
+              .then(() => setStatus('问题已提交，结果已返回，记忆已自动更新', 'ok'))
+              .catch(() => setStatus('问题已提交，结果已返回，记忆后台更新失败', 'err'))
+          }
+        } catch (e) {
+          setStatus('提交失败：' + (e.message || '未知错误'), 'err')
+        } finally {
+          queryBtn.disabled = false
+          queryBtn.textContent = '提交问题'
+        }
+      }
+
+      registerBtn.addEventListener('click', registerFolder)
+      agentBtn.addEventListener('click', uploadAgent)
+      queryBtn.addEventListener('click', runQuery)
+
+      queryEl.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runQuery()
+      })
+
+      fetchResources()
+    </script>
+  </body>
+</html>
