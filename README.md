@@ -57,7 +57,7 @@ cp ov.conf.example ov.conf
 ```bash
 OPENVIKING_CONFIG_FILE=./ov.conf uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
-
+或者你自己想要的端口。
 打开浏览器访问 [http://localhost:8080](http://localhost:8080)。
 
 ---
